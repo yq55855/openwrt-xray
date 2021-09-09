@@ -1,16 +1,15 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=openwrt-xray
-PKG_VERSION:=1.5.3
+PKG_VERSION:=1.5.4
 PKG_RELEASE:=1
 
 PKG_LICENSE:=MPLv2
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=yichya <mail@yichya.dev>
-
 PKG_SOURCE:=Xray-core-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/XTLS/Xray-core/tar.gz/v${PKG_VERSION}?
-PKG_HASH:=4b8d78cc20bdf2e8936c02b05d22f0a3231075155ffdc67508d8448ab8858252
+PKG_HASH:=af9b9b5b0a2d4f055d19f3580d1c2d3141bbaab9dd7824428c12ae0ced5f511e
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 
@@ -28,44 +27,19 @@ define Package/$(PKG_NAME)
 endef
 
 define Package/$(PKG_NAME)/description
-	Xray-core bare bones binary and optional geoip / geosite data files
+	Xray-core bare bones binary (compiled without cgo)
 endef
 
 define Package/$(PKG_NAME)/config
 menu "Xray Configuration"
 	depends on PACKAGE_$(PKG_NAME)
 
-config PACKAGE_XRAY_FETCH_VIA_PROXYCHAINS
-	bool "Fetch data files using proxychains (not recommended)"
-	default n
-
 config PACKAGE_XRAY_ENABLE_GOPROXY_IO
 	bool "Use goproxy.io to speed up module fetching (recommended for some network situations)"
 	default n
 
-config PACKAGE_XRAY_INCLUDE_GEOSITE
-	bool "Include Loyalsoldier geosite.dat"
-	default n
-
-choice 
-	prompt "Include Loyalsoldier geoip.dat"
-	default PACKAGE_XRAY_INCLUDE_GEOIP_NONE
-	config PACKAGE_XRAY_INCLUDE_GEOIP_NONE
-		bool "Do not include"
-	config PACKAGE_XRAY_INCLUDE_GEOIP_FULL
-		bool "Include full geoip"
-	config PACKAGE_XRAY_INCLUDE_GEOIP_CN_PRIVATE
-		bool "Include cn and private geoip only"
-endchoice
-
 endmenu
 endef
-
-PROXYCHAINS:=
-
-ifdef CONFIG_PACKAGE_XRAY_FETCH_VIA_PROXYCHAINS
-	PROXYCHAINS:=proxychains
-endif
 
 USE_GOPROXY:=
 ifdef CONFIG_PACKAGE_XRAY_ENABLE_GOPROXY_IO
@@ -87,19 +61,6 @@ endef
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/xray $(1)/usr/bin/xray
-	$(INSTALL_DIR) $(1)/usr/share/xray
-ifdef CONFIG_PACKAGE_XRAY_INCLUDE_GEOIP_FULL
-	$(PROXYCHAINS) wget https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat -O $(PKG_BUILD_DIR)/geoip.dat
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/geoip.dat $(1)/usr/share/xray/
-endif
-ifdef CONFIG_PACKAGE_XRAY_INCLUDE_GEOIP_CN_PRIVATE
-	$(PROXYCHAINS) wget https://github.com/Loyalsoldier/geoip/releases/latest/download/geoip-only-cn-private.dat -O $(PKG_BUILD_DIR)/geoip.dat
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/geoip.dat $(1)/usr/share/xray/
-endif
-ifdef CONFIG_PACKAGE_XRAY_INCLUDE_GEOSITE
-	$(PROXYCHAINS) wget https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat -O $(PKG_BUILD_DIR)/geosite.dat
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/geosite.dat $(1)/usr/share/xray/
-endif
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))
