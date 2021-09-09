@@ -1,0 +1,1532 @@
+diff --git a/app/router/condition.go b/app/router/condition.go
+index fd42156..fb72a19 100644
+--- a/app/router/condition.go
++++ b/app/router/condition.go
+@@ -3,9 +3,6 @@ package router
+ import (
+ 	"strings"
+ 
+-	"go.starlark.net/starlark"
+-	"go.starlark.net/syntax"
+-
+ 	"github.com/xtls/xray-core/common/net"
+ 	"github.com/xtls/xray-core/common/strmatcher"
+ 	"github.com/xtls/xray-core/features/routing"
+@@ -283,53 +280,3 @@ func (m *ProtocolMatcher) Apply(ctx routing.Context) bool {
+ 	}
+ 	return false
+ }
+-
+-type AttributeMatcher struct {
+-	program *starlark.Program
+-}
+-
+-func NewAttributeMatcher(code string) (*AttributeMatcher, error) {
+-	starFile, err := syntax.Parse("attr.star", "satisfied=("+code+")", 0)
+-	if err != nil {
+-		return nil, newError("attr rule").Base(err)
+-	}
+-	p, err := starlark.FileProgram(starFile, func(name string) bool {
+-		return name == "attrs"
+-	})
+-	if err != nil {
+-		return nil, err
+-	}
+-	return &AttributeMatcher{
+-		program: p,
+-	}, nil
+-}
+-
+-// Match implements attributes matching.
+-func (m *AttributeMatcher) Match(attrs map[string]string) bool {
+-	attrsDict := new(starlark.Dict)
+-	for key, value := range attrs {
+-		attrsDict.SetKey(starlark.String(key), starlark.String(value))
+-	}
+-
+-	predefined := make(starlark.StringDict)
+-	predefined["attrs"] = attrsDict
+-
+-	thread := &starlark.Thread{
+-		Name: "matcher",
+-	}
+-	results, err := m.program.Init(thread, predefined)
+-	if err != nil {
+-		newError("attr matcher").Base(err).WriteToLog()
+-	}
+-	satisfied := results["satisfied"]
+-	return satisfied != nil && bool(satisfied.Truth())
+-}
+-
+-// Apply implements Condition.
+-func (m *AttributeMatcher) Apply(ctx routing.Context) bool {
+-	attributes := ctx.GetAttributes()
+-	if attributes == nil {
+-		return false
+-	}
+-	return m.Match(attributes)
+-}
+diff --git a/app/router/config.go b/app/router/config.go
+index 9bb4bc4..650642f 100644
+--- a/app/router/config.go
++++ b/app/router/config.go
+@@ -142,14 +142,6 @@ func (rr *RoutingRule) BuildCondition() (Condition, error) {
+ 		conds.Add(NewProtocolMatcher(rr.Protocol))
+ 	}
+ 
+-	if len(rr.Attributes) > 0 {
+-		cond, err := NewAttributeMatcher(rr.Attributes)
+-		if err != nil {
+-			return nil, err
+-		}
+-		conds.Add(cond)
+-	}
+-
+ 	if conds.Len() == 0 {
+ 		return nil, newError("this rule has no effective fields").AtWarning()
+ 	}
+diff --git a/core/config.go b/core/config.go
+index c531855..700781d 100644
+--- a/core/config.go
++++ b/core/config.go
+@@ -54,10 +54,6 @@ func GetFormatByExtension(ext string) string {
+ 	switch strings.ToLower(ext) {
+ 	case "pb", "protobuf":
+ 		return "protobuf"
+-	case "yaml", "yml":
+-		return "yaml"
+-	case "toml":
+-		return "toml"
+ 	case "json":
+ 		return "json"
+ 	default:
+diff --git a/go.mod b/go.mod
+index 04525cb..dc491b0 100644
+--- a/go.mod
++++ b/go.mod
+@@ -3,21 +3,18 @@ module github.com/xtls/xray-core
+ go 1.18
+ 
+ require (
+-	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
+ 	github.com/golang/mock v1.6.0
+ 	github.com/golang/protobuf v1.5.2
+ 	github.com/google/go-cmp v0.5.7
+ 	github.com/gorilla/websocket v1.5.0
+ 	github.com/lucas-clemente/quic-go v0.27.0
+ 	github.com/miekg/dns v1.1.48
+-	github.com/pelletier/go-toml v1.9.5
+ 	github.com/pires/go-proxyproto v0.6.2
+ 	github.com/refraction-networking/utls v1.0.0
+ 	github.com/seiflotfy/cuckoofilter v0.0.0-20220411075957-e3b120b3f5fb
+ 	github.com/stretchr/testify v1.7.1
+ 	github.com/v2fly/ss-bloomring v0.0.0-20210312155135-28617310f63e
+ 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
+-	go.starlark.net v0.0.0-20220328144851-d1966c6b9fcd
+ 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
+ 	golang.org/x/net v0.0.0-20220421235706-1d1ef9303861
+ 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+@@ -41,13 +38,11 @@ require (
+ 	github.com/onsi/ginkgo v1.16.5 // indirect
+ 	github.com/pmezard/go-difflib v1.0.0 // indirect
+ 	github.com/riobard/go-bloom v0.0.0-20200614022211-cdc8013cb5b3 // indirect
+-	github.com/stretchr/objx v0.1.0 // indirect
+ 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
+ 	golang.org/x/text v0.3.7 // indirect
+ 	golang.org/x/tools v0.1.10 // indirect
+ 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
+ 	google.golang.org/genproto v0.0.0-20220422154200-b37d22cd5731 // indirect
+ 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
+-	gopkg.in/yaml.v2 v2.4.0 // indirect
+ 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+ )
+diff --git a/go.sum b/go.sum
+index a8f428e..4b0cb57 100644
+--- a/go.sum
++++ b/go.sum
+@@ -17,9 +17,6 @@ github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA
+ github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+ github.com/cheekybits/genny v1.0.0 h1:uGGa4nei+j20rOSeDeP5Of12XVm7TGUd4dJA9RDitfE=
+ github.com/cheekybits/genny v1.0.0/go.mod h1:+tQajlRqAUrPI7DOSpB0XAqZYtQakVtB7wXkRAgjxjQ=
+-github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
+-github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
+-github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMnBNeIyt5eFwwo7qiLfzFZmjNmxjkiQlU=
+ github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
+ github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
+ github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnhtbo57+VJT5O0JRkEi1Wbu0z5j0R8u5Hbk=
+@@ -48,13 +45,9 @@ github.com/francoispqt/gojay v1.2.13 h1:d2m3sFjloqoIUQU3TsHBgj6qg/BVGlTBeHDUmyJn
+ github.com/francoispqt/gojay v1.2.13/go.mod h1:ehT5mTG4ua4581f1++1WLG0vPdaA9HaiDsoyrBGkyDY=
+ github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
+ github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
+-github.com/fsnotify/fsnotify v1.5.1 h1:mZcQUHVQUQWoPXXtuf9yuEXKudkV2sx1E06UadKWpgI=
+-github.com/fsnotify/fsnotify v1.5.1/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5Ai1i3InKU=
+ github.com/fsnotify/fsnotify v1.5.3 h1:vNFpj2z7YIbwh2bw7x35sqYpp2wfuq+pivKbWG09B8c=
+ github.com/fsnotify/fsnotify v1.5.3/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5Ai1i3InKU=
+ github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
+-github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 h1:Mn26/9ZMNWSw9C9ERFA1PUxfmGpolnw2v0bKOREu5ew=
+-github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32/go.mod h1:GIjDIg/heH5DOkXY3YJ/wNhfHsQHoXGjl8G8amsYQ1I=
+ github.com/gliderlabs/ssh v0.1.1/go.mod h1:U7qILu1NlMHj9FlMhZLlkCdDnU1DBEAqr0aevW3Awn0=
+ github.com/go-errors/errors v1.0.1/go.mod h1:f4zRHt4oKfwPJE5k8C9vpYG+aDHdBFUsgrm6/TyX73Q=
+ github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 h1:p104kn46Q8WdvHunIJ9dAyjPVtrBPhSr3KT2yUst43I=
+@@ -88,7 +81,6 @@ github.com/google/go-cmp v0.3.0/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMyw
+ github.com/google/go-cmp v0.3.1/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
+ github.com/google/go-cmp v0.4.0/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+ github.com/google/go-cmp v0.5.0/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+-github.com/google/go-cmp v0.5.1/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+ github.com/google/go-cmp v0.5.5/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+ github.com/google/go-cmp v0.5.6/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+ github.com/google/go-cmp v0.5.7 h1:81/ik6ipDQS2aGcBfIN5dHDB36BwrStyeAQquSYCV4o=
+@@ -153,8 +145,6 @@ github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1y
+ github.com/onsi/gomega v1.13.0 h1:7lLHu94wT9Ij0o6EWWclhu0aOh32VxhkwEJvzuWPeak=
+ github.com/onsi/gomega v1.13.0/go.mod h1:lRk9szgn8TxENtWd0Tp4c3wjlRfMTMH27I+3Je41yGY=
+ github.com/openzipkin/zipkin-go v0.1.1/go.mod h1:NtoC/o8u3JlF1lSlyPNswIbeQH9bJTmOf0Erfk+hxe8=
+-github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=
+-github.com/pelletier/go-toml v1.9.5/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
+ github.com/phayes/freeport v0.0.0-20180830031419-95f893ade6f2 h1:JhzVVoYvbOACxoUmOs6V/G4D5nPVUW73rKvXxP4XUJc=
+ github.com/phayes/freeport v0.0.0-20180830031419-95f893ade6f2/go.mod h1:iIss55rKnNBTvrwdmkUpLnDpZoAHvWaiq5+iMmen4AE=
+ github.com/pires/go-proxyproto v0.6.2 h1:KAZ7UteSOt6urjme6ZldyFm4wDe/z0ZUP0Yv0Dos0d8=
+@@ -173,8 +163,6 @@ github.com/riobard/go-bloom v0.0.0-20200614022211-cdc8013cb5b3 h1:f/FNXud6gA3MNr
+ github.com/riobard/go-bloom v0.0.0-20200614022211-cdc8013cb5b3/go.mod h1:HgjTstvQsPGkxUsCd2KWxErBblirPizecHcpD3ffK+s=
+ github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
+ github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
+-github.com/seiflotfy/cuckoofilter v0.0.0-20220312154859-af7fbb8e765b h1:wHoB6ZYEnIVizebcj419LbN4Tagk7RDFiudRFKyzzmo=
+-github.com/seiflotfy/cuckoofilter v0.0.0-20220312154859-af7fbb8e765b/go.mod h1:bR6DqgcAl1zTcOX8/pE2Qkj9XO00eCNqmKb7lXP8EAg=
+ github.com/seiflotfy/cuckoofilter v0.0.0-20220411075957-e3b120b3f5fb h1:XfLJSPIOUX+osiMraVgIrMR27uMXnRJWGm1+GL8/63U=
+ github.com/seiflotfy/cuckoofilter v0.0.0-20220411075957-e3b120b3f5fb/go.mod h1:bR6DqgcAl1zTcOX8/pE2Qkj9XO00eCNqmKb7lXP8EAg=
+ github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
+@@ -202,7 +190,6 @@ github.com/shurcooL/users v0.0.0-20180125191416-49c67e49c537/go.mod h1:QJTqeLYED
+ github.com/shurcooL/webdavfs v0.0.0-20170829043945-18c3829fa133/go.mod h1:hKmq5kWdCj2z2KEozexVbfEZIWiTjhE0+UjmZgPqehw=
+ github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:UdhH50NIW0fCiwBSr0co2m7BnFLdv4fQTgdqdJTHFeE=
+ github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
+-github.com/stretchr/objx v0.1.0 h1:4G4v2dO3VZwixGIRoQ5Lfboy6nUhCyYzaqnIAPPhYs4=
+ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
+ github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
+@@ -219,13 +206,8 @@ github.com/xtls/go v0.0.0-20210920065950-d4af136d3672 h1:4mkzGhKqt3JO1BWYjtD3iRF
+ github.com/xtls/go v0.0.0-20210920065950-d4af136d3672/go.mod h1:YGGVbz9cOxyKFUmhW7LGaLZaMA0cPlHJinvAmVxEMSU=
+ github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
+ github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
+-github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
+ go.opencensus.io v0.18.0/go.mod h1:vKdFvxhtzZ9onBp9VKHK8z/sRpBMnKAsufL7wlDrCOA=
+ go.opentelemetry.io/proto/otlp v0.7.0/go.mod h1:PqfVotwruBrMGOCsRd/89rSnXhoiJIqeYNgFYFoEGnI=
+-go.starlark.net v0.0.0-20220302181546-5411bad688d1 h1:i0Sz4b+qJi5xwOaFZqZ+RNHkIpaKLDofei/Glt+PMNc=
+-go.starlark.net v0.0.0-20220302181546-5411bad688d1/go.mod h1:t3mmBBPzAVvK0L0n1drDmrQsJ8FoIx4INCqVMTr/Zo0=
+-go.starlark.net v0.0.0-20220328144851-d1966c6b9fcd h1:Uo/x0Ir5vQJ+683GXB9Ug+4fcjsbp7z7Ul8UaZbhsRM=
+-go.starlark.net v0.0.0-20220328144851-d1966c6b9fcd/go.mod h1:t3mmBBPzAVvK0L0n1drDmrQsJ8FoIx4INCqVMTr/Zo0=
+ go4.org v0.0.0-20180809161055-417644f6feb5/go.mod h1:MkTOUMDaeVYJUOUsaDXIhWPZYa1yOyC1qaOBpL57BhE=
+ golang.org/x/build v0.0.0-20190111050920-041ab4dc3f9d/go.mod h1:OWs+y06UdEOHN4y+MfF/py+xQ/tYqIWW03b70/CG9Rw=
+ golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
+@@ -234,9 +216,6 @@ golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a/go.mod h1:djNgcEr1/C05ACk
+ golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
+ golang.org/x/crypto v0.0.0-20200221231518-2aa609cf4a9d/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
+ golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
+-golang.org/x/crypto v0.0.0-20210817164053-32db794688a5/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
+-golang.org/x/crypto v0.0.0-20220312131142-6068a2e6cfdc h1:i6Z9eOQAdM7lvsbkT3fwFNtSAAC+A59TYilFj53HW+E=
+-golang.org/x/crypto v0.0.0-20220312131142-6068a2e6cfdc/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
+ golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 h1:kUhD7nTDoI3fVd9G4ORWrbV5NY0liEs/Jg2pv5f+bBA=
+ golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
+ golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
+@@ -246,8 +225,6 @@ golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961/go.mod h1:wehouNa3lNwaWXcvx
+ golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3/go.mod h1:6SW0HCj/g11FgYtHlgUYUwCkIfeOF89ocIRzGO/8vkc=
+ golang.org/x/mod v0.3.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
+ golang.org/x/mod v0.4.2/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
+-golang.org/x/mod v0.5.1 h1:OJxoQ/rynoF0dcCdI7cLPktw/hR2cueqYfjm43oqK38=
+-golang.org/x/mod v0.5.1/go.mod h1:5OXOZSfqPIIbmVBIIKWRFfZjPR0E5r58TLhUjH0a2Ro=
+ golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 h1:kQgndtyPBW/JIYERgdxfwMYh3AVStj88WQTlNDi2a+o=
+ golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3/go.mod h1:3p9vT2HGsQu2K1YbXdKPJLVgG5VJdoTa1poYQBtP1AY=
+ golang.org/x/net v0.0.0-20180724234803-3673e40ba225/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+@@ -265,14 +242,9 @@ golang.org/x/net v0.0.0-20200520004742-59133d7f0dd7/go.mod h1:qpuaurCH72eLCgpAm/
+ golang.org/x/net v0.0.0-20200707034311-ab3426394381/go.mod h1:/O7V0waA8r7cgGh81Ro3o1hOxt32SMVPicZroKQ2sZA=
+ golang.org/x/net v0.0.0-20200822124328-c89045814202/go.mod h1:/O7V0waA8r7cgGh81Ro3o1hOxt32SMVPicZroKQ2sZA=
+ golang.org/x/net v0.0.0-20201021035429-f5854403a974/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
+-golang.org/x/net v0.0.0-20210226172049-e18ecbb05110/go.mod h1:m0MpNAwzfU5UDzcl9v0D8zg8gWTRqZa9RBIspLL5mdg=
+ golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4/go.mod h1:p54w0d4576C0XHj96bSt6lcn1PtDYWL6XObtHCRCNQM=
+ golang.org/x/net v0.0.0-20210428140749-89ef3d95e781/go.mod h1:OJAsFXCWl8Ukc7SiCT/9KSuxbyM7479/AVlXFRxuMCk=
+ golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+-golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+-golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+-golang.org/x/net v0.0.0-20220225172249-27dd8689420f h1:oA4XRj0qtSt8Yo1Zms0CUlsT3KG69V2UGQWPBxujDmc=
+-golang.org/x/net v0.0.0-20220225172249-27dd8689420f/go.mod h1:CfG3xpIq0wQ8r1q4Su4UZFWDARRcnwPjda9FqA0JpMk=
+ golang.org/x/net v0.0.0-20220421235706-1d1ef9303861 h1:yssD99+7tqHWO5Gwh81phT+67hg+KttniBr6UnEXOY8=
+ golang.org/x/net v0.0.0-20220421235706-1d1ef9303861/go.mod h1:CfG3xpIq0wQ8r1q4Su4UZFWDARRcnwPjda9FqA0JpMk=
+ golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
+@@ -310,15 +282,9 @@ golang.org/x/sys v0.0.0-20210423082822-04245dca01da/go.mod h1:h1NjWce9XRLGQEsW7w
+ golang.org/x/sys v0.0.0-20210510120138-977fb7262007/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+ golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+ golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+-golang.org/x/sys v0.0.0-20210908233432-aa78b53d3365/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+-golang.org/x/sys v0.0.0-20211019181941-9d821ace8654/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+-golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+-golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 h1:y/woIyUBFbpQGKS0u1aHF/40WUDnek3fPOyD08H5Vng=
+-golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+ golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 h1:xHms4gcpe1YE7A3yIllJXP16CMAGuqwO2lX1mTyyRRc=
+ golang.org/x/sys v0.0.0-20220422013727-9388b58f7150/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+ golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
+-golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
+ golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+ golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+ golang.org/x/text v0.3.2/go.mod h1:bEr9sfX3Q8Zfm5fL9x+3itogRgK3+ptLWKqgva+5dAk=
+@@ -341,14 +307,11 @@ golang.org/x/tools v0.0.0-20191119224855-298f0cb1881e/go.mod h1:b+2E5dAYhXwXZwtn
+ golang.org/x/tools v0.0.0-20201224043029-2b0845dc783e/go.mod h1:emZCQorbCU4vsT4fOWvOPXz4eW1wZW4PmDk9uLelYpA=
+ golang.org/x/tools v0.1.1/go.mod h1:o0xws9oXOQQZyjljx8fwUC0k7L1pTE6eaCbjGeHmOkk=
+ golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2/go.mod h1:o0xws9oXOQQZyjljx8fwUC0k7L1pTE6eaCbjGeHmOkk=
+-golang.org/x/tools v0.1.9 h1:j9KsMiaP1c3B0OTQGth0/k+miLGTgLsAFUCrF2vLcF8=
+-golang.org/x/tools v0.1.9/go.mod h1:nABZi5QlRsZVlzPpHl034qft6wpY4eDcsTt5AaioBiU=
+ golang.org/x/tools v0.1.10 h1:QjFRCZxdOhBJ/UNgnBZLbNV13DlbnK0quyivTnXJM20=
+ golang.org/x/tools v0.1.10/go.mod h1:Uh6Zz+xoGYZom868N8YTex3t7RhtHDBrE8Gzo9bV56E=
+ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+ golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+ golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+-golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1NKEZ+0owSTG1fDTci4IqFcE=
+ golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+ golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f h1:GGU+dLjvlC3qDwqYgL6UgRmHXhOOgns0bZu2Ty5mm6U=
+ golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+@@ -367,8 +330,6 @@ google.golang.org/genproto v0.0.0-20190306203927-b5d61aea6440/go.mod h1:VzzqZJRn
+ google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55/go.mod h1:DMBHOl98Agz4BDEuKkezgsaosCRResVns1a3J2ZsMNc=
+ google.golang.org/genproto v0.0.0-20200513103714-09dca8ec2884/go.mod h1:55QSHmfGQM9UVYDPBsyGGes0y52j32PQ3BqQfXhyH3c=
+ google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013/go.mod h1:NbSheEEYHJ7i3ixzK3sjbqSGDJWnxyFXZblF3eUsNvo=
+-google.golang.org/genproto v0.0.0-20220310185008-1973136f34c6 h1:FglFEfyj61zP3c6LgjmVHxYxZWXYul9oiS1EZqD5gLc=
+-google.golang.org/genproto v0.0.0-20220310185008-1973136f34c6/go.mod h1:kGP+zUP2Ddo0ayMi4YuN7C3WZyJvGLZRh8Z5wnAqvEI=
+ google.golang.org/genproto v0.0.0-20220422154200-b37d22cd5731 h1:nquqdM9+ps0JZcIiI70+tqoaIFS5Ql4ZuK8UXnz3HfE=
+ google.golang.org/genproto v0.0.0-20220422154200-b37d22cd5731/go.mod h1:8w6bsBMX6yCPbAVTeqQHvzxW0EIFigd5lZyahWgyfDo=
+ google.golang.org/grpc v1.14.0/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
+@@ -380,8 +341,6 @@ google.golang.org/grpc v1.25.1/go.mod h1:c3i+UQWmh7LiEpx4sFZnkU36qjEYZ0imhYfXVyQ
+ google.golang.org/grpc v1.27.0/go.mod h1:qbnxyOmOxrQa7FizSgH+ReBfzJrCY1pSN7KXBS8abTk=
+ google.golang.org/grpc v1.33.1/go.mod h1:fr5YgcSWrqhRRxogOsw7RzIpsmvOZ6IcH4kBYTpR3n0=
+ google.golang.org/grpc v1.36.0/go.mod h1:qjiiYl8FncCW8feJPdyg3v6XW24KsRHe+dy9BAGRRjU=
+-google.golang.org/grpc v1.44.0/go.mod h1:k+4IHHFw41K8+bbowsex27ge2rCb65oeWqe4jJ590SU=
+-google.golang.org/grpc v1.45.0 h1:NEpgUqV3Z+ZjkqMsxMg11IaDrXY4RY6CQukSGK0uI1M=
+ google.golang.org/grpc v1.45.0/go.mod h1:lN7owxKUQEqMfSyQikvvk5tf/6zMPsrK+ONuO11+0rQ=
+ google.golang.org/grpc v1.46.0 h1:oCjezcn6g6A75TGoKYBPgKmVBLexhYLM6MebdrPApP8=
+ google.golang.org/grpc v1.46.0/go.mod h1:vN9eftEi1UMyUsIF80+uQXhHjbXYbm0uXoFCACuMGWk=
+diff --git a/infra/conf/mtproto.go b/infra/conf/mtproto.go
+deleted file mode 100644
+index 4cd5972..0000000
+--- a/infra/conf/mtproto.go
++++ /dev/null
+@@ -1,68 +0,0 @@
+-package conf
+-
+-import (
+-	"encoding/hex"
+-	"encoding/json"
+-
+-	"github.com/golang/protobuf/proto"
+-
+-	"github.com/xtls/xray-core/common/protocol"
+-	"github.com/xtls/xray-core/common/serial"
+-	"github.com/xtls/xray-core/proxy/mtproto"
+-)
+-
+-type MTProtoAccount struct {
+-	Secret string `json:"secret"`
+-}
+-
+-// Build implements Buildable
+-func (a *MTProtoAccount) Build() (*mtproto.Account, error) {
+-	if len(a.Secret) != 32 {
+-		return nil, newError("MTProto secret must have 32 chars")
+-	}
+-	secret, err := hex.DecodeString(a.Secret)
+-	if err != nil {
+-		return nil, newError("failed to decode secret: ", a.Secret).Base(err)
+-	}
+-	return &mtproto.Account{
+-		Secret: secret,
+-	}, nil
+-}
+-
+-type MTProtoServerConfig struct {
+-	Users []json.RawMessage `json:"users"`
+-}
+-
+-func (c *MTProtoServerConfig) Build() (proto.Message, error) {
+-	config := &mtproto.ServerConfig{}
+-
+-	if len(c.Users) == 0 {
+-		return nil, newError("zero MTProto users configured.")
+-	}
+-	config.User = make([]*protocol.User, len(c.Users))
+-	for idx, rawData := range c.Users {
+-		user := new(protocol.User)
+-		if err := json.Unmarshal(rawData, user); err != nil {
+-			return nil, newError("invalid MTProto user").Base(err)
+-		}
+-		account := new(MTProtoAccount)
+-		if err := json.Unmarshal(rawData, account); err != nil {
+-			return nil, newError("invalid MTProto user").Base(err)
+-		}
+-		accountProto, err := account.Build()
+-		if err != nil {
+-			return nil, newError("failed to parse MTProto user").Base(err)
+-		}
+-		user.Account = serial.ToTypedMessage(accountProto)
+-		config.User[idx] = user
+-	}
+-
+-	return config, nil
+-}
+-
+-type MTProtoClientConfig struct{}
+-
+-func (c *MTProtoClientConfig) Build() (proto.Message, error) {
+-	config := new(mtproto.ClientConfig)
+-	return config, nil
+-}
+diff --git a/infra/conf/mtproto_test.go b/infra/conf/mtproto_test.go
+deleted file mode 100644
+index f44cb19..0000000
+--- a/infra/conf/mtproto_test.go
++++ /dev/null
+@@ -1,40 +0,0 @@
+-package conf_test
+-
+-import (
+-	"testing"
+-
+-	"github.com/xtls/xray-core/common/protocol"
+-	"github.com/xtls/xray-core/common/serial"
+-	. "github.com/xtls/xray-core/infra/conf"
+-	"github.com/xtls/xray-core/proxy/mtproto"
+-)
+-
+-func TestMTProtoServerConfig(t *testing.T) {
+-	creator := func() Buildable {
+-		return new(MTProtoServerConfig)
+-	}
+-
+-	runMultiTestCase(t, []TestCase{
+-		{
+-			Input: `{
+-				"users": [{
+-					"email": "love@example.com",
+-					"level": 1,
+-					"secret": "b0cbcef5a486d9636472ac27f8e11a9d"
+-				}]
+-			}`,
+-			Parser: loadJSON(creator),
+-			Output: &mtproto.ServerConfig{
+-				User: []*protocol.User{
+-					{
+-						Email: "love@example.com",
+-						Level: 1,
+-						Account: serial.ToTypedMessage(&mtproto.Account{
+-							Secret: []byte{176, 203, 206, 245, 164, 134, 217, 99, 100, 114, 172, 39, 248, 225, 26, 157},
+-						}),
+-					},
+-				},
+-			},
+-		},
+-	})
+-}
+diff --git a/infra/conf/serial/builder.go b/infra/conf/serial/builder.go
+index 443dbdb..84b07c7 100644
+--- a/infra/conf/serial/builder.go
++++ b/infra/conf/serial/builder.go
+@@ -35,8 +35,6 @@ var ReaderDecoderByFormat = make(map[string]readerDecoder)
+ 
+ func init() {
+ 	ReaderDecoderByFormat["json"] = DecodeJSONConfig
+-	ReaderDecoderByFormat["yaml"] = DecodeYAMLConfig
+-	ReaderDecoderByFormat["toml"] = DecodeTOMLConfig
+ 
+ 	core.ConfigBuilderForFiles = BuildConfig
+ }
+diff --git a/infra/conf/serial/loader.go b/infra/conf/serial/loader.go
+index 9195c6f..03075d9 100644
+--- a/infra/conf/serial/loader.go
++++ b/infra/conf/serial/loader.go
+@@ -5,9 +5,6 @@ import (
+ 	"encoding/json"
+ 	"io"
+ 
+-	"github.com/ghodss/yaml"
+-	"github.com/pelletier/go-toml"
+-
+ 	"github.com/xtls/xray-core/common/errors"
+ 	"github.com/xtls/xray-core/core"
+ 	"github.com/xtls/xray-core/infra/conf"
+@@ -83,68 +80,3 @@ func LoadJSONConfig(reader io.Reader) (*core.Config, error) {
+ 
+ 	return pbConfig, nil
+ }
+-
+-// DecodeTOMLConfig reads from reader and decode the config into *conf.Config
+-// using github.com/pelletier/go-toml and map to convert toml to json.
+-func DecodeTOMLConfig(reader io.Reader) (*conf.Config, error) {
+-	tomlFile, err := io.ReadAll(reader)
+-	if err != nil {
+-		return nil, newError("failed to read config file").Base(err)
+-	}
+-
+-	configMap := make(map[string]interface{})
+-	if err := toml.Unmarshal(tomlFile, &configMap); err != nil {
+-		return nil, newError("failed to convert toml to map").Base(err)
+-	}
+-
+-	jsonFile, err := json.Marshal(&configMap)
+-	if err != nil {
+-		return nil, newError("failed to convert map to json").Base(err)
+-	}
+-
+-	return DecodeJSONConfig(bytes.NewReader(jsonFile))
+-}
+-
+-func LoadTOMLConfig(reader io.Reader) (*core.Config, error) {
+-	tomlConfig, err := DecodeTOMLConfig(reader)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	pbConfig, err := tomlConfig.Build()
+-	if err != nil {
+-		return nil, newError("failed to parse toml config").Base(err)
+-	}
+-
+-	return pbConfig, nil
+-}
+-
+-// DecodeYAMLConfig reads from reader and decode the config into *conf.Config
+-// using github.com/ghodss/yaml to convert yaml to json.
+-func DecodeYAMLConfig(reader io.Reader) (*conf.Config, error) {
+-	yamlFile, err := io.ReadAll(reader)
+-	if err != nil {
+-		return nil, newError("failed to read config file").Base(err)
+-	}
+-
+-	jsonFile, err := yaml.YAMLToJSON(yamlFile)
+-	if err != nil {
+-		return nil, newError("failed to convert yaml to json").Base(err)
+-	}
+-
+-	return DecodeJSONConfig(bytes.NewReader(jsonFile))
+-}
+-
+-func LoadYAMLConfig(reader io.Reader) (*core.Config, error) {
+-	yamlConfig, err := DecodeYAMLConfig(reader)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	pbConfig, err := yamlConfig.Build()
+-	if err != nil {
+-		return nil, newError("failed to parse yaml config").Base(err)
+-	}
+-
+-	return pbConfig, nil
+-}
+diff --git a/infra/conf/xray.go b/infra/conf/xray.go
+index d4895d8..0128d95 100644
+--- a/infra/conf/xray.go
++++ b/infra/conf/xray.go
+@@ -25,7 +25,6 @@ var (
+ 		"vless":         func() interface{} { return new(VLessInboundConfig) },
+ 		"vmess":         func() interface{} { return new(VMessInboundConfig) },
+ 		"trojan":        func() interface{} { return new(TrojanServerConfig) },
+-		"mtproto":       func() interface{} { return new(MTProtoServerConfig) },
+ 	}, "protocol", "settings")
+ 
+ 	outboundConfigLoader = NewJSONConfigLoader(ConfigCreatorCache{
+@@ -38,7 +37,6 @@ var (
+ 		"vless":       func() interface{} { return new(VLessOutboundConfig) },
+ 		"vmess":       func() interface{} { return new(VMessOutboundConfig) },
+ 		"trojan":      func() interface{} { return new(TrojanClientConfig) },
+-		"mtproto":     func() interface{} { return new(MTProtoClientConfig) },
+ 		"dns":         func() interface{} { return new(DNSOutboundConfig) },
+ 	}, "protocol", "settings")
+ 
+diff --git a/main/distro/all/all.go b/main/distro/all/all.go
+index db9d5c4..9760fe3 100644
+--- a/main/distro/all/all.go
++++ b/main/distro/all/all.go
+@@ -40,7 +40,6 @@ import (
+ 	_ "github.com/xtls/xray-core/proxy/freedom"
+ 	_ "github.com/xtls/xray-core/proxy/http"
+ 	_ "github.com/xtls/xray-core/proxy/loopback"
+-	_ "github.com/xtls/xray-core/proxy/mtproto"
+ 	_ "github.com/xtls/xray-core/proxy/shadowsocks"
+ 	_ "github.com/xtls/xray-core/proxy/socks"
+ 	_ "github.com/xtls/xray-core/proxy/trojan"
+@@ -72,8 +71,6 @@ import (
+ 
+ 	// JSON & TOML & YAML
+ 	_ "github.com/xtls/xray-core/main/json"
+-	_ "github.com/xtls/xray-core/main/toml"
+-	_ "github.com/xtls/xray-core/main/yaml"
+ 
+ 	// Load config from file or http(s)
+ 	_ "github.com/xtls/xray-core/main/confloader/external"
+diff --git a/main/run.go b/main/run.go
+index 9796770..9a4af2f 100644
+--- a/main/run.go
++++ b/main/run.go
+@@ -114,10 +114,6 @@ func getRegepxByFormat() string {
+ 	switch strings.ToLower(*format) {
+ 	case "json":
+ 		return `^.+\.json$`
+-	case "toml":
+-		return `^.+\.toml$`
+-	case "yaml", "yml":
+-		return `^.+\.(yaml|yml)$`
+ 	default:
+ 		return `^.+\.(json|toml|yaml|yml)$`
+ 	}
+diff --git a/main/toml/errors.generated.go b/main/toml/errors.generated.go
+deleted file mode 100644
+index 0bad202..0000000
+--- a/main/toml/errors.generated.go
++++ /dev/null
+@@ -1,9 +0,0 @@
+-package toml
+-
+-import "github.com/xtls/xray-core/common/errors"
+-
+-type errPathObjHolder struct{}
+-
+-func newError(values ...interface{}) *errors.Error {
+-	return errors.New(values...).WithPathObj(errPathObjHolder{})
+-}
+diff --git a/main/toml/toml.go b/main/toml/toml.go
+deleted file mode 100644
+index e52077f..0000000
+--- a/main/toml/toml.go
++++ /dev/null
+@@ -1,48 +0,0 @@
+-package toml
+-
+-import (
+-	"io"
+-
+-	"github.com/xtls/xray-core/common"
+-	"github.com/xtls/xray-core/common/cmdarg"
+-	"github.com/xtls/xray-core/core"
+-	"github.com/xtls/xray-core/infra/conf"
+-	"github.com/xtls/xray-core/infra/conf/serial"
+-	"github.com/xtls/xray-core/main/confloader"
+-)
+-
+-func init() {
+-	common.Must(core.RegisterConfigLoader(&core.ConfigFormat{
+-		Name:      "TOML",
+-		Extension: []string{"toml"},
+-		Loader: func(input interface{}) (*core.Config, error) {
+-			switch v := input.(type) {
+-			case cmdarg.Arg:
+-				cf := &conf.Config{}
+-				for i, arg := range v {
+-					newError("Reading config: ", arg).AtInfo().WriteToLog()
+-					r, err := confloader.LoadConfig(arg)
+-					if err != nil {
+-						return nil, newError("failed to read config: ", arg).Base(err)
+-					}
+-					c, err := serial.DecodeTOMLConfig(r)
+-					if err != nil {
+-						return nil, newError("failed to decode config: ", arg).Base(err)
+-					}
+-					if i == 0 {
+-						// This ensure even if the muti-json parser do not support a setting,
+-						// It is still respected automatically for the first configure file
+-						*cf = *c
+-						continue
+-					}
+-					cf.Override(c, arg)
+-				}
+-				return cf.Build()
+-			case io.Reader:
+-				return serial.LoadTOMLConfig(v)
+-			default:
+-				return nil, newError("unknow type")
+-			}
+-		},
+-	}))
+-}
+diff --git a/main/yaml/errors.generated.go b/main/yaml/errors.generated.go
+deleted file mode 100644
+index c4da8fa..0000000
+--- a/main/yaml/errors.generated.go
++++ /dev/null
+@@ -1,9 +0,0 @@
+-package yaml
+-
+-import "github.com/xtls/xray-core/common/errors"
+-
+-type errPathObjHolder struct{}
+-
+-func newError(values ...interface{}) *errors.Error {
+-	return errors.New(values...).WithPathObj(errPathObjHolder{})
+-}
+diff --git a/main/yaml/yaml.go b/main/yaml/yaml.go
+deleted file mode 100644
+index 760a571..0000000
+--- a/main/yaml/yaml.go
++++ /dev/null
+@@ -1,48 +0,0 @@
+-package yaml
+-
+-import (
+-	"io"
+-
+-	"github.com/xtls/xray-core/common"
+-	"github.com/xtls/xray-core/common/cmdarg"
+-	"github.com/xtls/xray-core/core"
+-	"github.com/xtls/xray-core/infra/conf"
+-	"github.com/xtls/xray-core/infra/conf/serial"
+-	"github.com/xtls/xray-core/main/confloader"
+-)
+-
+-func init() {
+-	common.Must(core.RegisterConfigLoader(&core.ConfigFormat{
+-		Name:      "YAML",
+-		Extension: []string{"yaml", "yml"},
+-		Loader: func(input interface{}) (*core.Config, error) {
+-			switch v := input.(type) {
+-			case cmdarg.Arg:
+-				cf := &conf.Config{}
+-				for i, arg := range v {
+-					newError("Reading config: ", arg).AtInfo().WriteToLog()
+-					r, err := confloader.LoadConfig(arg)
+-					if err != nil {
+-						return nil, newError("failed to read config: ", arg).Base(err)
+-					}
+-					c, err := serial.DecodeYAMLConfig(r)
+-					if err != nil {
+-						return nil, newError("failed to decode config: ", arg).Base(err)
+-					}
+-					if i == 0 {
+-						// This ensure even if the muti-json parser do not support a setting,
+-						// It is still respected automatically for the first configure file
+-						*cf = *c
+-						continue
+-					}
+-					cf.Override(c, arg)
+-				}
+-				return cf.Build()
+-			case io.Reader:
+-				return serial.LoadYAMLConfig(v)
+-			default:
+-				return nil, newError("unknow type")
+-			}
+-		},
+-	}))
+-}
+diff --git a/proxy/mtproto/auth.go b/proxy/mtproto/auth.go
+deleted file mode 100644
+index cdd66d6..0000000
+--- a/proxy/mtproto/auth.go
++++ /dev/null
+@@ -1,148 +0,0 @@
+-package mtproto
+-
+-import (
+-	"context"
+-	"crypto/rand"
+-	"crypto/sha256"
+-	"io"
+-	"sync"
+-
+-	"github.com/xtls/xray-core/common"
+-)
+-
+-const (
+-	HeaderSize = 64
+-)
+-
+-type SessionContext struct {
+-	ConnectionType [4]byte
+-	DataCenterID   uint16
+-}
+-
+-func DefaultSessionContext() SessionContext {
+-	return SessionContext{
+-		ConnectionType: [4]byte{0xef, 0xef, 0xef, 0xef},
+-		DataCenterID:   0,
+-	}
+-}
+-
+-type contextKey int32
+-
+-const (
+-	sessionContextKey contextKey = iota
+-)
+-
+-func ContextWithSessionContext(ctx context.Context, c SessionContext) context.Context {
+-	return context.WithValue(ctx, sessionContextKey, c)
+-}
+-
+-func SessionContextFromContext(ctx context.Context) SessionContext {
+-	if c := ctx.Value(sessionContextKey); c != nil {
+-		return c.(SessionContext)
+-	}
+-	return DefaultSessionContext()
+-}
+-
+-type Authentication struct {
+-	Header        [HeaderSize]byte
+-	DecodingKey   [32]byte
+-	EncodingKey   [32]byte
+-	DecodingNonce [16]byte
+-	EncodingNonce [16]byte
+-}
+-
+-func (a *Authentication) DataCenterID() uint16 {
+-	x := ((int16(a.Header[61]) << 8) | int16(a.Header[60]))
+-	if x < 0 {
+-		x = -x
+-	}
+-	return uint16(x) - 1
+-}
+-
+-func (a *Authentication) ConnectionType() [4]byte {
+-	var x [4]byte
+-	copy(x[:], a.Header[56:60])
+-	return x
+-}
+-
+-func (a *Authentication) ApplySecret(b []byte) {
+-	a.DecodingKey = sha256.Sum256(append(a.DecodingKey[:], b...))
+-	a.EncodingKey = sha256.Sum256(append(a.EncodingKey[:], b...))
+-}
+-
+-func generateRandomBytes(random []byte, connType [4]byte) {
+-	for {
+-		common.Must2(rand.Read(random))
+-
+-		if random[0] == 0xef {
+-			continue
+-		}
+-
+-		val := (uint32(random[3]) << 24) | (uint32(random[2]) << 16) | (uint32(random[1]) << 8) | uint32(random[0])
+-		if val == 0x44414548 || val == 0x54534f50 || val == 0x20544547 || val == 0x4954504f || val == 0xeeeeeeee {
+-			continue
+-		}
+-
+-		if (uint32(random[7])<<24)|(uint32(random[6])<<16)|(uint32(random[5])<<8)|uint32(random[4]) == 0x00000000 {
+-			continue
+-		}
+-
+-		copy(random[56:60], connType[:])
+-
+-		return
+-	}
+-}
+-
+-func NewAuthentication(sc SessionContext) *Authentication {
+-	auth := getAuthenticationObject()
+-	random := auth.Header[:]
+-	generateRandomBytes(random, sc.ConnectionType)
+-	copy(auth.EncodingKey[:], random[8:])
+-	copy(auth.EncodingNonce[:], random[8+32:])
+-	keyivInverse := Inverse(random[8 : 8+32+16])
+-	copy(auth.DecodingKey[:], keyivInverse)
+-	copy(auth.DecodingNonce[:], keyivInverse[32:])
+-	return auth
+-}
+-
+-func ReadAuthentication(reader io.Reader) (*Authentication, error) {
+-	auth := getAuthenticationObject()
+-
+-	if _, err := io.ReadFull(reader, auth.Header[:]); err != nil {
+-		putAuthenticationObject(auth)
+-		return nil, err
+-	}
+-
+-	copy(auth.DecodingKey[:], auth.Header[8:])
+-	copy(auth.DecodingNonce[:], auth.Header[8+32:])
+-	keyivInverse := Inverse(auth.Header[8 : 8+32+16])
+-	copy(auth.EncodingKey[:], keyivInverse)
+-	copy(auth.EncodingNonce[:], keyivInverse[32:])
+-
+-	return auth, nil
+-}
+-
+-// Inverse returns a new byte array. It is a sequence of bytes when the input is read from end to beginning.Inverse
+-// Visible for testing only.
+-func Inverse(b []byte) []byte {
+-	lenb := len(b)
+-	b2 := make([]byte, lenb)
+-	for i, v := range b {
+-		b2[lenb-i-1] = v
+-	}
+-	return b2
+-}
+-
+-var authPool = sync.Pool{
+-	New: func() interface{} {
+-		return new(Authentication)
+-	},
+-}
+-
+-func getAuthenticationObject() *Authentication {
+-	return authPool.Get().(*Authentication)
+-}
+-
+-func putAuthenticationObject(auth *Authentication) {
+-	authPool.Put(auth)
+-}
+diff --git a/proxy/mtproto/auth_test.go b/proxy/mtproto/auth_test.go
+deleted file mode 100644
+index 9fc6a9a..0000000
+--- a/proxy/mtproto/auth_test.go
++++ /dev/null
+@@ -1,53 +0,0 @@
+-package mtproto_test
+-
+-import (
+-	"bytes"
+-	"crypto/rand"
+-	"testing"
+-
+-	"github.com/google/go-cmp/cmp"
+-
+-	"github.com/xtls/xray-core/common"
+-	. "github.com/xtls/xray-core/proxy/mtproto"
+-)
+-
+-func TestInverse(t *testing.T) {
+-	const size = 64
+-	b := make([]byte, 64)
+-	for b[0] == b[size-1] {
+-		common.Must2(rand.Read(b))
+-	}
+-
+-	bi := Inverse(b)
+-	if b[0] == bi[0] {
+-		t.Fatal("seems bytes are not inversed: ", b[0], "vs", bi[0])
+-	}
+-
+-	bii := Inverse(bi)
+-	if r := cmp.Diff(bii, b); r != "" {
+-		t.Fatal(r)
+-	}
+-}
+-
+-func TestAuthenticationReadWrite(t *testing.T) {
+-	a := NewAuthentication(DefaultSessionContext())
+-	b := bytes.NewReader(a.Header[:])
+-	a2, err := ReadAuthentication(b)
+-	common.Must(err)
+-
+-	if r := cmp.Diff(a.EncodingKey[:], a2.DecodingKey[:]); r != "" {
+-		t.Error("decoding key: ", r)
+-	}
+-
+-	if r := cmp.Diff(a.EncodingNonce[:], a2.DecodingNonce[:]); r != "" {
+-		t.Error("decoding nonce: ", r)
+-	}
+-
+-	if r := cmp.Diff(a.DecodingKey[:], a2.EncodingKey[:]); r != "" {
+-		t.Error("encoding key: ", r)
+-	}
+-
+-	if r := cmp.Diff(a.DecodingNonce[:], a2.EncodingNonce[:]); r != "" {
+-		t.Error("encoding nonce: ", r)
+-	}
+-}
+diff --git a/proxy/mtproto/client.go b/proxy/mtproto/client.go
+deleted file mode 100644
+index 6825fda..0000000
+--- a/proxy/mtproto/client.go
++++ /dev/null
+@@ -1,76 +0,0 @@
+-package mtproto
+-
+-import (
+-	"context"
+-
+-	"github.com/xtls/xray-core/common"
+-	"github.com/xtls/xray-core/common/buf"
+-	"github.com/xtls/xray-core/common/crypto"
+-	"github.com/xtls/xray-core/common/net"
+-	"github.com/xtls/xray-core/common/session"
+-	"github.com/xtls/xray-core/common/task"
+-	"github.com/xtls/xray-core/transport"
+-	"github.com/xtls/xray-core/transport/internet"
+-)
+-
+-type Client struct{}
+-
+-func NewClient(ctx context.Context, config *ClientConfig) (*Client, error) {
+-	return &Client{}, nil
+-}
+-
+-func (c *Client) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer) error {
+-	outbound := session.OutboundFromContext(ctx)
+-	if outbound == nil || !outbound.Target.IsValid() {
+-		return newError("unknown destination.")
+-	}
+-	dest := outbound.Target
+-	if dest.Network != net.Network_TCP {
+-		return newError("not TCP traffic", dest)
+-	}
+-
+-	conn, err := dialer.Dial(ctx, dest)
+-	if err != nil {
+-		return newError("failed to dial to ", dest).Base(err).AtWarning()
+-	}
+-	defer conn.Close()
+-
+-	sc := SessionContextFromContext(ctx)
+-	auth := NewAuthentication(sc)
+-	defer putAuthenticationObject(auth)
+-
+-	request := func() error {
+-		encryptor := crypto.NewAesCTRStream(auth.EncodingKey[:], auth.EncodingNonce[:])
+-
+-		var header [HeaderSize]byte
+-		encryptor.XORKeyStream(header[:], auth.Header[:])
+-		copy(header[:56], auth.Header[:])
+-
+-		if _, err := conn.Write(header[:]); err != nil {
+-			return newError("failed to write auth header").Base(err)
+-		}
+-
+-		connWriter := buf.NewWriter(crypto.NewCryptionWriter(encryptor, conn))
+-		return buf.Copy(link.Reader, connWriter)
+-	}
+-
+-	response := func() error {
+-		decryptor := crypto.NewAesCTRStream(auth.DecodingKey[:], auth.DecodingNonce[:])
+-
+-		connReader := buf.NewReader(crypto.NewCryptionReader(decryptor, conn))
+-		return buf.Copy(connReader, link.Writer)
+-	}
+-
+-	responseDoneAndCloseWriter := task.OnSuccess(response, task.Close(link.Writer))
+-	if err := task.Run(ctx, request, responseDoneAndCloseWriter); err != nil {
+-		return newError("connection ends").Base(err)
+-	}
+-
+-	return nil
+-}
+-
+-func init() {
+-	common.Must(common.RegisterConfig((*ClientConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+-		return NewClient(ctx, config.(*ClientConfig))
+-	}))
+-}
+diff --git a/proxy/mtproto/config.go b/proxy/mtproto/config.go
+deleted file mode 100644
+index fcd203d..0000000
+--- a/proxy/mtproto/config.go
++++ /dev/null
+@@ -1,24 +0,0 @@
+-package mtproto
+-
+-import (
+-	"github.com/xtls/xray-core/common/protocol"
+-)
+-
+-func (a *Account) Equals(another protocol.Account) bool {
+-	aa, ok := another.(*Account)
+-	if !ok {
+-		return false
+-	}
+-
+-	if len(a.Secret) != len(aa.Secret) {
+-		return false
+-	}
+-
+-	for i, v := range a.Secret {
+-		if v != aa.Secret[i] {
+-			return false
+-		}
+-	}
+-
+-	return true
+-}
+diff --git a/proxy/mtproto/config.pb.go b/proxy/mtproto/config.pb.go
+deleted file mode 100644
+index 96e3407..0000000
+--- a/proxy/mtproto/config.pb.go
++++ /dev/null
+@@ -1,272 +0,0 @@
+-// Code generated by protoc-gen-go. DO NOT EDIT.
+-// versions:
+-// 	protoc-gen-go v1.27.1
+-// 	protoc        v3.18.0
+-// source: proxy/mtproto/config.proto
+-
+-package mtproto
+-
+-import (
+-	protocol "github.com/xtls/xray-core/common/protocol"
+-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+-	reflect "reflect"
+-	sync "sync"
+-)
+-
+-const (
+-	// Verify that this generated code is sufficiently up-to-date.
+-	_ = protoimpl.EnforceVersion(20 - protoimpl.MinVersion)
+-	// Verify that runtime/protoimpl is sufficiently up-to-date.
+-	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
+-)
+-
+-type Account struct {
+-	state         protoimpl.MessageState
+-	sizeCache     protoimpl.SizeCache
+-	unknownFields protoimpl.UnknownFields
+-
+-	Secret []byte `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"`
+-}
+-
+-func (x *Account) Reset() {
+-	*x = Account{}
+-	if protoimpl.UnsafeEnabled {
+-		mi := &file_proxy_mtproto_config_proto_msgTypes[0]
+-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+-		ms.StoreMessageInfo(mi)
+-	}
+-}
+-
+-func (x *Account) String() string {
+-	return protoimpl.X.MessageStringOf(x)
+-}
+-
+-func (*Account) ProtoMessage() {}
+-
+-func (x *Account) ProtoReflect() protoreflect.Message {
+-	mi := &file_proxy_mtproto_config_proto_msgTypes[0]
+-	if protoimpl.UnsafeEnabled && x != nil {
+-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+-		if ms.LoadMessageInfo() == nil {
+-			ms.StoreMessageInfo(mi)
+-		}
+-		return ms
+-	}
+-	return mi.MessageOf(x)
+-}
+-
+-// Deprecated: Use Account.ProtoReflect.Descriptor instead.
+-func (*Account) Descriptor() ([]byte, []int) {
+-	return file_proxy_mtproto_config_proto_rawDescGZIP(), []int{0}
+-}
+-
+-func (x *Account) GetSecret() []byte {
+-	if x != nil {
+-		return x.Secret
+-	}
+-	return nil
+-}
+-
+-type ServerConfig struct {
+-	state         protoimpl.MessageState
+-	sizeCache     protoimpl.SizeCache
+-	unknownFields protoimpl.UnknownFields
+-
+-	// User is a list of users that allowed to connect to this inbound.
+-	// Although this is a repeated field, only the first user is effective for
+-	// now.
+-	User []*protocol.User `protobuf:"bytes,1,rep,name=user,proto3" json:"user,omitempty"`
+-}
+-
+-func (x *ServerConfig) Reset() {
+-	*x = ServerConfig{}
+-	if protoimpl.UnsafeEnabled {
+-		mi := &file_proxy_mtproto_config_proto_msgTypes[1]
+-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+-		ms.StoreMessageInfo(mi)
+-	}
+-}
+-
+-func (x *ServerConfig) String() string {
+-	return protoimpl.X.MessageStringOf(x)
+-}
+-
+-func (*ServerConfig) ProtoMessage() {}
+-
+-func (x *ServerConfig) ProtoReflect() protoreflect.Message {
+-	mi := &file_proxy_mtproto_config_proto_msgTypes[1]
+-	if protoimpl.UnsafeEnabled && x != nil {
+-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+-		if ms.LoadMessageInfo() == nil {
+-			ms.StoreMessageInfo(mi)
+-		}
+-		return ms
+-	}
+-	return mi.MessageOf(x)
+-}
+-
+-// Deprecated: Use ServerConfig.ProtoReflect.Descriptor instead.
+-func (*ServerConfig) Descriptor() ([]byte, []int) {
+-	return file_proxy_mtproto_config_proto_rawDescGZIP(), []int{1}
+-}
+-
+-func (x *ServerConfig) GetUser() []*protocol.User {
+-	if x != nil {
+-		return x.User
+-	}
+-	return nil
+-}
+-
+-type ClientConfig struct {
+-	state         protoimpl.MessageState
+-	sizeCache     protoimpl.SizeCache
+-	unknownFields protoimpl.UnknownFields
+-}
+-
+-func (x *ClientConfig) Reset() {
+-	*x = ClientConfig{}
+-	if protoimpl.UnsafeEnabled {
+-		mi := &file_proxy_mtproto_config_proto_msgTypes[2]
+-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+-		ms.StoreMessageInfo(mi)
+-	}
+-}
+-
+-func (x *ClientConfig) String() string {
+-	return protoimpl.X.MessageStringOf(x)
+-}
+-
+-func (*ClientConfig) ProtoMessage() {}
+-
+-func (x *ClientConfig) ProtoReflect() protoreflect.Message {
+-	mi := &file_proxy_mtproto_config_proto_msgTypes[2]
+-	if protoimpl.UnsafeEnabled && x != nil {
+-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+-		if ms.LoadMessageInfo() == nil {
+-			ms.StoreMessageInfo(mi)
+-		}
+-		return ms
+-	}
+-	return mi.MessageOf(x)
+-}
+-
+-// Deprecated: Use ClientConfig.ProtoReflect.Descriptor instead.
+-func (*ClientConfig) Descriptor() ([]byte, []int) {
+-	return file_proxy_mtproto_config_proto_rawDescGZIP(), []int{2}
+-}
+-
+-var File_proxy_mtproto_config_proto protoreflect.FileDescriptor
+-
+-var file_proxy_mtproto_config_proto_rawDesc = []byte{
+-	0x0a, 0x1a, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2f, 0x6d, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f,
+-	0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x12, 0x78, 0x72,
+-	0x61, 0x79, 0x2e, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x6d, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+-	0x1a, 0x1a, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x6f,
+-	0x6c, 0x2f, 0x75, 0x73, 0x65, 0x72, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x21, 0x0a, 0x07,
+-	0x41, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x65, 0x63, 0x72, 0x65,
+-	0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74, 0x22,
+-	0x3e, 0x0a, 0x0c, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x12,
+-	0x2e, 0x0a, 0x04, 0x75, 0x73, 0x65, 0x72, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e,
+-	0x78, 0x72, 0x61, 0x79, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+-	0x6f, 0x63, 0x6f, 0x6c, 0x2e, 0x55, 0x73, 0x65, 0x72, 0x52, 0x04, 0x75, 0x73, 0x65, 0x72, 0x22,
+-	0x0e, 0x0a, 0x0c, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x42,
+-	0x58, 0x0a, 0x16, 0x63, 0x6f, 0x6d, 0x2e, 0x78, 0x72, 0x61, 0x79, 0x2e, 0x70, 0x72, 0x6f, 0x78,
+-	0x79, 0x2e, 0x6d, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x27, 0x67, 0x69, 0x74,
+-	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x78, 0x74, 0x6c, 0x73, 0x2f, 0x78, 0x72, 0x61,
+-	0x79, 0x2d, 0x63, 0x6f, 0x72, 0x65, 0x2f, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2f, 0x6d, 0x74, 0x70,
+-	0x72, 0x6f, 0x74, 0x6f, 0xaa, 0x02, 0x12, 0x58, 0x72, 0x61, 0x79, 0x2e, 0x50, 0x72, 0x6f, 0x78,
+-	0x79, 0x2e, 0x4d, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+-	0x33,
+-}
+-
+-var (
+-	file_proxy_mtproto_config_proto_rawDescOnce sync.Once
+-	file_proxy_mtproto_config_proto_rawDescData = file_proxy_mtproto_config_proto_rawDesc
+-)
+-
+-func file_proxy_mtproto_config_proto_rawDescGZIP() []byte {
+-	file_proxy_mtproto_config_proto_rawDescOnce.Do(func() {
+-		file_proxy_mtproto_config_proto_rawDescData = protoimpl.X.CompressGZIP(file_proxy_mtproto_config_proto_rawDescData)
+-	})
+-	return file_proxy_mtproto_config_proto_rawDescData
+-}
+-
+-var file_proxy_mtproto_config_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+-var file_proxy_mtproto_config_proto_goTypes = []interface{}{
+-	(*Account)(nil),       // 0: xray.proxy.mtproto.Account
+-	(*ServerConfig)(nil),  // 1: xray.proxy.mtproto.ServerConfig
+-	(*ClientConfig)(nil),  // 2: xray.proxy.mtproto.ClientConfig
+-	(*protocol.User)(nil), // 3: xray.common.protocol.User
+-}
+-var file_proxy_mtproto_config_proto_depIdxs = []int32{
+-	3, // 0: xray.proxy.mtproto.ServerConfig.user:type_name -> xray.common.protocol.User
+-	1, // [1:1] is the sub-list for method output_type
+-	1, // [1:1] is the sub-list for method input_type
+-	1, // [1:1] is the sub-list for extension type_name
+-	1, // [1:1] is the sub-list for extension extendee
+-	0, // [0:1] is the sub-list for field type_name
+-}
+-
+-func init() { file_proxy_mtproto_config_proto_init() }
+-func file_proxy_mtproto_config_proto_init() {
+-	if File_proxy_mtproto_config_proto != nil {
+-		return
+-	}
+-	if !protoimpl.UnsafeEnabled {
+-		file_proxy_mtproto_config_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+-			switch v := v.(*Account); i {
+-			case 0:
+-				return &v.state
+-			case 1:
+-				return &v.sizeCache
+-			case 2:
+-				return &v.unknownFields
+-			default:
+-				return nil
+-			}
+-		}
+-		file_proxy_mtproto_config_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+-			switch v := v.(*ServerConfig); i {
+-			case 0:
+-				return &v.state
+-			case 1:
+-				return &v.sizeCache
+-			case 2:
+-				return &v.unknownFields
+-			default:
+-				return nil
+-			}
+-		}
+-		file_proxy_mtproto_config_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+-			switch v := v.(*ClientConfig); i {
+-			case 0:
+-				return &v.state
+-			case 1:
+-				return &v.sizeCache
+-			case 2:
+-				return &v.unknownFields
+-			default:
+-				return nil
+-			}
+-		}
+-	}
+-	type x struct{}
+-	out := protoimpl.TypeBuilder{
+-		File: protoimpl.DescBuilder{
+-			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
+-			RawDescriptor: file_proxy_mtproto_config_proto_rawDesc,
+-			NumEnums:      0,
+-			NumMessages:   3,
+-			NumExtensions: 0,
+-			NumServices:   0,
+-		},
+-		GoTypes:           file_proxy_mtproto_config_proto_goTypes,
+-		DependencyIndexes: file_proxy_mtproto_config_proto_depIdxs,
+-		MessageInfos:      file_proxy_mtproto_config_proto_msgTypes,
+-	}.Build()
+-	File_proxy_mtproto_config_proto = out.File
+-	file_proxy_mtproto_config_proto_rawDesc = nil
+-	file_proxy_mtproto_config_proto_goTypes = nil
+-	file_proxy_mtproto_config_proto_depIdxs = nil
+-}
+diff --git a/proxy/mtproto/config.proto b/proxy/mtproto/config.proto
+deleted file mode 100644
+index 65997bc..0000000
+--- a/proxy/mtproto/config.proto
++++ /dev/null
+@@ -1,22 +0,0 @@
+-syntax = "proto3";
+-
+-package xray.proxy.mtproto;
+-option csharp_namespace = "Xray.Proxy.Mtproto";
+-option go_package = "github.com/xtls/xray-core/proxy/mtproto";
+-option java_package = "com.xray.proxy.mtproto";
+-option java_multiple_files = true;
+-
+-import "common/protocol/user.proto";
+-
+-message Account {
+-  bytes secret = 1;
+-}
+-
+-message ServerConfig {
+-  // User is a list of users that allowed to connect to this inbound.
+-  // Although this is a repeated field, only the first user is effective for
+-  // now.
+-  repeated xray.common.protocol.User user = 1;
+-}
+-
+-message ClientConfig {}
+diff --git a/proxy/mtproto/errors.generated.go b/proxy/mtproto/errors.generated.go
+deleted file mode 100644
+index 012202d..0000000
+--- a/proxy/mtproto/errors.generated.go
++++ /dev/null
+@@ -1,9 +0,0 @@
+-package mtproto
+-
+-import "github.com/xtls/xray-core/common/errors"
+-
+-type errPathObjHolder struct{}
+-
+-func newError(values ...interface{}) *errors.Error {
+-	return errors.New(values...).WithPathObj(errPathObjHolder{})
+-}
+diff --git a/proxy/mtproto/mtproto.go b/proxy/mtproto/mtproto.go
+deleted file mode 100644
+index af7983a..0000000
+--- a/proxy/mtproto/mtproto.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package mtproto
+-
+-//go:generate go run github.com/xtls/xray-core/common/errors/errorgen
+diff --git a/proxy/mtproto/server.go b/proxy/mtproto/server.go
+deleted file mode 100644
+index 2079df1..0000000
+--- a/proxy/mtproto/server.go
++++ /dev/null
+@@ -1,160 +0,0 @@
+-package mtproto
+-
+-import (
+-	"bytes"
+-	"context"
+-	"time"
+-
+-	"github.com/xtls/xray-core/common"
+-	"github.com/xtls/xray-core/common/buf"
+-	"github.com/xtls/xray-core/common/crypto"
+-	"github.com/xtls/xray-core/common/net"
+-	"github.com/xtls/xray-core/common/protocol"
+-	"github.com/xtls/xray-core/common/session"
+-	"github.com/xtls/xray-core/common/signal"
+-	"github.com/xtls/xray-core/common/task"
+-	"github.com/xtls/xray-core/core"
+-	"github.com/xtls/xray-core/features/policy"
+-	"github.com/xtls/xray-core/features/routing"
+-	"github.com/xtls/xray-core/transport/internet/stat"
+-)
+-
+-var dcList = []net.Address{
+-	net.ParseAddress("149.154.175.50"),
+-	net.ParseAddress("149.154.167.51"),
+-	net.ParseAddress("149.154.175.100"),
+-	net.ParseAddress("149.154.167.91"),
+-	net.ParseAddress("149.154.171.5"),
+-}
+-
+-type Server struct {
+-	user    *protocol.User
+-	account *Account
+-	policy  policy.Manager
+-}
+-
+-func NewServer(ctx context.Context, config *ServerConfig) (*Server, error) {
+-	if len(config.User) == 0 {
+-		return nil, newError("no user configured.")
+-	}
+-
+-	user := config.User[0]
+-	rawAccount, err := config.User[0].GetTypedAccount()
+-	if err != nil {
+-		return nil, newError("invalid account").Base(err)
+-	}
+-	account, ok := rawAccount.(*Account)
+-	if !ok {
+-		return nil, newError("not a MTProto account")
+-	}
+-
+-	v := core.MustFromContext(ctx)
+-
+-	return &Server{
+-		user:    user,
+-		account: account,
+-		policy:  v.GetFeature(policy.ManagerType()).(policy.Manager),
+-	}, nil
+-}
+-
+-func (s *Server) Network() []net.Network {
+-	return []net.Network{net.Network_TCP}
+-}
+-
+-var (
+-	ctype1 = []byte{0xef, 0xef, 0xef, 0xef}
+-	ctype2 = []byte{0xee, 0xee, 0xee, 0xee}
+-)
+-
+-func isValidConnectionType(c [4]byte) bool {
+-	if bytes.Equal(c[:], ctype1) {
+-		return true
+-	}
+-	if bytes.Equal(c[:], ctype2) {
+-		return true
+-	}
+-	return false
+-}
+-
+-func (s *Server) Process(ctx context.Context, network net.Network, conn stat.Connection, dispatcher routing.Dispatcher) error {
+-	sPolicy := s.policy.ForLevel(s.user.Level)
+-
+-	if err := conn.SetDeadline(time.Now().Add(sPolicy.Timeouts.Handshake)); err != nil {
+-		newError("failed to set deadline").Base(err).WriteToLog(session.ExportIDToError(ctx))
+-	}
+-	auth, err := ReadAuthentication(conn)
+-	if err != nil {
+-		return newError("failed to read authentication header").Base(err)
+-	}
+-	defer putAuthenticationObject(auth)
+-
+-	if err := conn.SetDeadline(time.Time{}); err != nil {
+-		newError("failed to clear deadline").Base(err).WriteToLog(session.ExportIDToError(ctx))
+-	}
+-
+-	auth.ApplySecret(s.account.Secret)
+-
+-	decryptor := crypto.NewAesCTRStream(auth.DecodingKey[:], auth.DecodingNonce[:])
+-	decryptor.XORKeyStream(auth.Header[:], auth.Header[:])
+-
+-	ct := auth.ConnectionType()
+-	if !isValidConnectionType(ct) {
+-		return newError("invalid connection type: ", ct)
+-	}
+-
+-	dcID := auth.DataCenterID()
+-	if dcID >= uint16(len(dcList)) {
+-		return newError("invalid datacenter id: ", dcID)
+-	}
+-
+-	dest := net.Destination{
+-		Network: net.Network_TCP,
+-		Address: dcList[dcID],
+-		Port:    net.Port(443),
+-	}
+-
+-	ctx, cancel := context.WithCancel(ctx)
+-	timer := signal.CancelAfterInactivity(ctx, cancel, sPolicy.Timeouts.ConnectionIdle)
+-	ctx = policy.ContextWithBufferPolicy(ctx, sPolicy.Buffer)
+-
+-	sc := SessionContext{
+-		ConnectionType: ct,
+-		DataCenterID:   dcID,
+-	}
+-	ctx = ContextWithSessionContext(ctx, sc)
+-
+-	link, err := dispatcher.Dispatch(ctx, dest)
+-	if err != nil {
+-		return newError("failed to dispatch request to: ", dest).Base(err)
+-	}
+-
+-	request := func() error {
+-		defer timer.SetTimeout(sPolicy.Timeouts.DownlinkOnly)
+-
+-		reader := buf.NewReader(crypto.NewCryptionReader(decryptor, conn))
+-		return buf.Copy(reader, link.Writer, buf.UpdateActivity(timer))
+-	}
+-
+-	response := func() error {
+-		defer timer.SetTimeout(sPolicy.Timeouts.UplinkOnly)
+-
+-		encryptor := crypto.NewAesCTRStream(auth.EncodingKey[:], auth.EncodingNonce[:])
+-		writer := buf.NewWriter(crypto.NewCryptionWriter(encryptor, conn))
+-		return buf.Copy(link.Reader, writer, buf.UpdateActivity(timer))
+-	}
+-
+-	responseDoneAndCloseWriter := task.OnSuccess(response, task.Close(link.Writer))
+-	if err := task.Run(ctx, request, responseDoneAndCloseWriter); err != nil {
+-		common.Interrupt(link.Reader)
+-		common.Interrupt(link.Writer)
+-		return newError("connection ends").Base(err)
+-	}
+-
+-	return nil
+-}
+-
+-func init() {
+-	common.Must(common.RegisterConfig((*ServerConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
+-		return NewServer(ctx, config.(*ServerConfig))
+-	}))
+-}
