@@ -63,9 +63,6 @@ jobs:
           - arch: i386_pentium4
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/x86/generic
             sdk_name: -sdk-x86-generic_
-          - arch: mips64_octeonplus
-            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/octeon/generic
-            sdk_name: -sdk-octeon_
           - arch: mipsel_24kc
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/ramips/mt7620
             sdk_name: -sdk-ramips-mt7620_
