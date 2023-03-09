@@ -48,15 +48,9 @@ jobs:
           - arch: arm_cortex-a9_vfpv3-d16
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/mvebu/cortexa9
             sdk_name: -sdk-mvebu-cortexa9_
-          - arch: arm_fa526
-            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/gemini/generic
-            sdk_name: -sdk-gemini_
           - arch: arm_mpcore
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/oxnas/ox820
             sdk_name: -sdk-oxnas-ox820_
-          - arch: arm_xscale
-            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/kirkwood/generic
-            sdk_name: -sdk-kirkwood_
           - arch: i386_pentium
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/x86/legacy
             sdk_name: -sdk-x86-legacy_
@@ -66,9 +60,6 @@ jobs:
           - arch: mipsel_24kc
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/ramips/mt7620
             sdk_name: -sdk-ramips-mt7620_
-          - arch: mipsel_24kc_24kf
-            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/pistachio/generic
-            sdk_name: -sdk-pistachio_
           - arch: mipsel_74kc
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/bcm47xx/mips74k
             sdk_name: -sdk-bcm47xx-mips74k_
